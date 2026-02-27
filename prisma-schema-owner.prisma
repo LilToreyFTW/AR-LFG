@@ -1,0 +1,277 @@
+// prisma/schema.prisma (UPDATED)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth Models (Required for Discord OAuth)
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Application Models
+model User {
+  id                String      @id @default(cuid())
+  name              String?
+  email             String?     @unique
+  emailVerified     DateTime?
+  image             String?
+  
+  // Discord specific
+  discordId         String?     @unique
+  
+  // ARC Raiders specific
+  embarkId          String?     @unique
+  embarkUsername    String?
+  bio               String?
+  
+  // Admin/Owner fields
+  role              String      @default("user") // owner, admin, moderator, user
+  isOwner           Boolean     @default(false)
+  isAdmin           Boolean     @default(false)
+  isModerator       Boolean     @default(false)
+  isBanned          Boolean     @default(false)
+  banReason         String?
+  bannedAt          DateTime?
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  gameProfile       GameProfile?
+  sentRequests      FriendRequest[] @relation("sender")
+  receivedRequests  FriendRequest[] @relation("receiver")
+  friends           Friend[]        @relation("user")
+  friendOf          Friend[]        @relation("friend")
+  lFGPostings       LFGPosting[]
+  participants      LFGParticipant[]
+  sentInvites       GameInvite[]    @relation("inviter")
+  receivedInvites   GameInvite[]    @relation("invitee")
+  modActions        ModAction[]     @relation("moderator")
+  adminLogs         AdminLog[]
+
+  @@index([email])
+  @@index([discordId])
+  @@index([embarkId])
+  @@index([role])
+  @@index([isOwner])
+}
+
+model GameProfile {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  embarkId        String    @unique
+  embarkUsername  String
+  level           Int       @default(1)
+  rank            String?
+  totalKills      Int       @default(0)
+  totalDeaths     Int       @default(0)
+  totalWins       Int       @default(0)
+  totalMatches    Int       @default(0)
+  favoriteClass   String?
+  favoriteWeapon  String?
+  playstyle       String?
+  timezone        String?
+  languages       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([embarkId])
+}
+
+model FriendRequest {
+  id          String    @id @default(cuid())
+  senderId    String
+  receiverId  String
+  status      String    @default("pending")
+  message     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sender      User      @relation("sender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User      @relation("receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId])
+  @@index([senderId])
+}
+
+model Friend {
+  id        String    @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime  @default(now())
+
+  user      User      @relation("user", fields: [userId], references: [id], onDelete: Cascade)
+  friend    User      @relation("friend", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([friendId])
+}
+
+model LFGPosting {
+  id              String          @id @default(cuid())
+  creatorId       String
+  title           String
+  description     String
+  gameMode        String
+  skillLevel      String
+  playersNeeded   Int
+  minLevel        Int             @default(1)
+  requiredRank    String?
+  timezone        String?
+  language        String?         @default("English")
+  status          String          @default("active") // active, filled, closed
+  
+  // Moderation
+  isFeatured      Boolean         @default(false)
+  isRemoved       Boolean         @default(false)
+  removalReason   String?
+  
+  createdAt       DateTime        @default(now())
+  expiresAt       DateTime?
+  updatedAt       DateTime        @updatedAt
+
+  creator         User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  participants    LFGParticipant[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([gameMode])
+  @@index([isFeatured])
+}
+
+model LFGParticipant {
+  id              String    @id @default(cuid())
+  lFGPostingId    String
+  userId          String
+  joinedAt        DateTime  @default(now())
+  status          String    @default("joined")
+
+  lFGPosting      LFGPosting @relation(fields: [lFGPostingId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lFGPostingId, userId])
+  @@index([userId])
+}
+
+model GameInvite {
+  id          String    @id @default(cuid())
+  inviterId   String
+  inviteeId   String
+  gameMode    String
+  teamName    String?
+  message     String?
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  inviter     User      @relation("inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee     User      @relation("invitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+
+  @@index([inviteeId])
+  @@index([inviterId])
+}
+
+model UserPreferences {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  notificationsOn Boolean   @default(true)
+  emailNotifs     Boolean   @default(false)
+  maxAge          Int?
+  preferredGameModes String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// ===== ADMIN/MODERATION MODELS =====
+
+model ModAction {
+  id              String    @id @default(cuid())
+  moderatorId     String
+  targetUserId    String?
+  targetPostingId String?
+  action          String    // ban, unban, mute, unmute, warn, remove_post
+  reason          String
+  notes           String?
+  
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime? // For temporary bans/mutes
+  
+  moderator       User      @relation("moderator", fields: [moderatorId], references: [id])
+  
+  @@index([moderatorId])
+  @@index([targetUserId])
+  @@index([action])
+}
+
+model AdminLog {
+  id              String    @id @default(cuid())
+  userId          String
+  action          String    // site_settings_changed, featured_post, etc.
+  details         String    // JSON string of changes
+  ipAddress       String?
+  userAgent       String?
+  
+  createdAt       DateTime  @default(now())
+  
+  user            User      @relation(fields: [userId], references: [id])
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model SiteSettings {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  value           String    // JSON
+  description     String?
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?   // User ID who updated it
+  
+  @@index([key])
+}

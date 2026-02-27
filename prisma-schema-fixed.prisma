@@ -1,0 +1,406 @@
+// prisma-schema-fixed.prisma
+// ARC Raiders LFG — Full schema
+// Discord OAuth · Embark ID · Factions · Groups · Trader Rep · LFG
+// Provider: SQLite (local dev) — swap to mysql/postgresql for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// NEXTAUTH — Discord OAuth
+// ─────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String   // Discord snowflake from OAuth
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────────
+// USER — Core identity (Discord ID + Embark ID)
+// ─────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  emailVerified  DateTime?
+  image          String?
+
+  // Discord OAuth fields
+  discordId      String?   @unique  // Discord snowflake — primary identifier
+  discordTag     String?            // username or legacy username#0000
+  discordAvatar  String?            // CDN avatar URL
+
+  // Embark / ARC Raiders — linked after sign-up
+  embarkId       String?   @unique  // Embark account ID
+  embarkUsername String?            // In-game display name
+
+  // Profile
+  bio            String?
+  timezone       String?   @default("UTC")
+  platform       String?   @default("PC") // PC | PS5 | XSX | XSS | Crossplay
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // NextAuth relations
+  accounts       Account[]
+  sessions       Session[]
+
+  // Game relations
+  gameProfile    GameProfile?
+  traderRep      TraderReputation[]
+
+  // Faction & group relations
+  ownedFactions  Faction[]       @relation("FactionCreator")
+  factionMember  FactionMember[]
+  ownedGroups    Group[]         @relation("GroupLeader")
+  groupMembers   GroupMember[]
+
+  // LFG
+  lfgPostings    LFGPosting[]
+  lfgParticipant LFGParticipant[]
+
+  // Social
+  sentRequests   FriendRequest[] @relation("Sender")
+  recvRequests   FriendRequest[] @relation("Receiver")
+  friends        Friend[]        @relation("UserFriend")
+  friendOf       Friend[]        @relation("FriendOf")
+  sentInvites    GameInvite[]    @relation("Inviter")
+  recvInvites    GameInvite[]    @relation("Invitee")
+
+  @@index([discordId])
+  @@index([embarkId])
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────
+// GAME PROFILE — Embark stats per user
+// ─────────────────────────────────────────────
+
+model GameProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  embarkId       String   @unique
+  embarkUsername String
+
+  // Progression
+  level          Int      @default(1)
+  rank           String?  // Bronze | Silver | Gold | Platinum | Diamond
+  prestige       Int      @default(0)
+
+  // Match stats
+  totalKills     Int      @default(0)
+  totalDeaths    Int      @default(0)
+  totalWins      Int      @default(0)
+  totalMatches   Int      @default(0)
+  totalExtracts  Int      @default(0)
+
+  // Playstyle preferences
+  playstyle      String?  @default("Balanced") // PvP | PvE | Balanced | Stealth | Support
+  favoriteWeapon String?
+  favoriteMap    String?  // Dam Battlegrounds | Buried City | Spaceport | Blue Gate | Stella Montis
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([embarkId])
+}
+
+// ─────────────────────────────────────────────
+// TRADERS — The 5 Speranza traders (seeded)
+// ─────────────────────────────────────────────
+
+model Trader {
+  id          Int                @id @default(autoincrement())
+  name        String             @unique
+  role        String             // Their role in Speranza
+  specialty   String             // What they sell
+  description String?
+
+  reputation  TraderReputation[]
+}
+
+// Per-user reputation with each trader (unlocks at rep 7, 12, 20)
+model TraderReputation {
+  id         String   @id @default(cuid())
+  userId     String
+  traderId   Int
+  repLevel   Int      @default(0) // 0-20 mirrors in-game unlock gates
+  questsDone Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trader     Trader   @relation(fields: [traderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, traderId])
+  @@index([traderId])
+}
+
+// ─────────────────────────────────────────────
+// FACTIONS — Community & user-created factions
+// ─────────────────────────────────────────────
+
+model Faction {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  tag         String?  // e.g. [FMF] — shown in UI
+  description String?
+
+  // allegiance: Aggressive | Neutral | Pacifist | Custom
+  allegiance  String   @default("Custom")
+  // playstyle: PvP | PvE | Balanced | Support | Bounty Hunter
+  playstyle   String   @default("Balanced")
+
+  creatorId   String?  // NULL = preset faction
+  bannerColor String   @default("#00d9ff")
+  iconUrl     String?
+  maxMembers  Int      @default(0)  // 0 = unlimited
+  isPublic    Boolean  @default(true)
+  isPreset    Boolean  @default(false) // true = seeded community faction
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  creator     User?          @relation("FactionCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  members     FactionMember[]
+  groups      Group[]
+
+  // LFG postings linked to this faction
+  lfgPostings LFGPosting[]
+
+  @@index([creatorId])
+  @@index([allegiance])
+}
+
+model FactionMember {
+  id         String   @id @default(cuid())
+  factionId  String
+  userId     String
+  // role: Leader | Officer | Member | Recruit
+  role       String   @default("Member")
+  // status: active | pending | banned
+  status     String   @default("active")
+  invitedBy  String?
+  joinedAt   DateTime @default(now())
+
+  faction    Faction  @relation(fields: [factionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([factionId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// GROUPS — Squads (max 3 in-game) & community groups
+// ─────────────────────────────────────────────
+
+model Group {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  leaderId     String
+  factionId    String?
+
+  // gameMode: Extraction | Solo | Duo | Trio | Any
+  gameMode     String   @default("Any")
+  // skillLevel: Beginner | Intermediate | Advanced | Veteran | Any
+  skillLevel   String   @default("Any")
+  maxSize      Int      @default(3)   // 3 for in-game squad
+  isSquad      Boolean  @default(true) // true = in-game squad (max 3)
+  isPublic     Boolean  @default(true)
+
+  // preferredMap: Dam Battlegrounds | Buried City | Spaceport | Blue Gate | Stella Montis | Any
+  preferredMap String   @default("Any")
+  timezone     String   @default("UTC")
+  language     String   @default("English")
+  platform     String   @default("Crossplay")
+
+  // status: recruiting | full | inactive
+  status       String   @default("recruiting")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leader       User          @relation("GroupLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  faction      Faction?      @relation(fields: [factionId], references: [id], onDelete: SetNull)
+  members      GroupMember[]
+  gameInvites  GameInvite[]
+
+  @@index([leaderId])
+  @@index([factionId])
+  @@index([status])
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  // role: Leader | Co-Leader | Member
+  role     String   @default("Member")
+  // status: active | pending | kicked
+  status   String   @default("active")
+  joinedAt DateTime @default(now())
+
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// LFG POSTINGS
+// ─────────────────────────────────────────────
+
+model LFGPosting {
+  id            String   @id @default(cuid())
+  creatorId     String
+  groupId       String?
+  factionId     String?
+
+  title         String
+  description   String?
+
+  // gameMode: Extraction | Solo | Duo | Trio | Any
+  gameMode      String   @default("Extraction")
+  // skillLevel: Beginner | Intermediate | Advanced | Veteran | Any
+  skillLevel    String   @default("Any")
+  playersNeeded Int      @default(2)
+  minLevel      Int      @default(1)
+
+  // preferredMap: Dam Battlegrounds | Buried City | Spaceport | Blue Gate | Stella Montis | Any
+  preferredMap  String   @default("Any")
+  timezone      String   @default("UTC")
+  language      String   @default("English")
+  platform      String   @default("Crossplay")
+
+  // status: active | filled | closed | expired
+  status        String   @default("active")
+
+  createdAt     DateTime @default(now())
+  expiresAt     DateTime?
+  updatedAt     DateTime @updatedAt
+
+  creator      User             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  faction      Faction?         @relation(fields: [factionId], references: [id], onDelete: SetNull)
+  participants LFGParticipant[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([gameMode])
+  @@index([factionId])
+}
+
+model LFGParticipant {
+  id           String    @id @default(cuid())
+  lfgPostingId String
+  userId       String
+  // status: joined | left | removed
+  status       String    @default("joined")
+  joinedAt     DateTime  @default(now())
+
+  lfgPosting   LFGPosting @relation(fields: [lfgPostingId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lfgPostingId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// SOCIAL — Friends & Game Invites
+// ─────────────────────────────────────────────
+
+model FriendRequest {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  // status: pending | accepted | rejected
+  status     String   @default("pending")
+  message    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender     User     @relation("Sender",   fields: [senderId],   references: [id], onDelete: Cascade)
+  receiver   User     @relation("Receiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@index([receiverId])
+}
+
+model Friend {
+  id        String   @id @default(cuid())
+  userId    String
+  friendId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserFriend", fields: [userId],   references: [id], onDelete: Cascade)
+  friend    User     @relation("FriendOf",   fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([friendId])
+}
+
+model GameInvite {
+  id        String    @id @default(cuid())
+  inviterId String
+  inviteeId String
+  groupId   String?
+  // gameMode: Extraction | Solo | Duo | Trio | Any
+  gameMode  String    @default("Extraction")
+  message   String?
+  // status: pending | accepted | declined | expired
+  status    String    @default("pending")
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+  updatedAt DateTime  @updatedAt
+
+  inviter   User      @relation("Inviter",  fields: [inviterId], references: [id], onDelete: Cascade)
+  invitee   User      @relation("Invitee",  fields: [inviteeId], references: [id], onDelete: Cascade)
+  group     Group?    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([inviteeId])
+  @@index([inviterId])
+}
