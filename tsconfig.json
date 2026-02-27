@@ -40,6 +40,16 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "api-admin-routes.ts",
+    "api-nextauth.ts",
+    "api-nextauth-owner.ts",
+    "app-admin-page.tsx",
+    "app-layout.tsx",
+    "app-layout-discord.tsx",
+    "app-page.tsx",
+    "components-Navigation.tsx",
+    "components-Navigation-Discord.tsx",
+    "lib-owner.ts"
   ]
 }
