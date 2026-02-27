@@ -1,4 +1,4 @@
-// src/app/api/lfg/postings/route.ts
+﻿// src/app/api/lfg/postings/route.ts
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!(session?.user as any)?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json()
     const { title, description, gameMode, skillLevel, playersNeeded, timezone, language, preferredMap } = body
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     const posting = await prisma.lFGPosting.create({
       data: {
-        creatorId:    session.user.id,
+        creatorId:    (session.user as any).id,
         title,
         description,
         gameMode:     gameMode     || 'Extraction',
@@ -66,3 +66,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create posting' }, { status: 500 })
   }
 }
+
+
+
