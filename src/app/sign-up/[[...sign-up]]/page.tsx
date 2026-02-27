@@ -1,9 +1,7 @@
-import { SignUp } from '@clerk/nextjs'
+// src/app/sign-up/[[...sign-up]]/page.tsx
+// Redirect sign-up to sign-in (Discord OAuth handles both)
+import { redirect } from 'next/navigation'
 
 export default function SignUpPage() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950">
-      <SignUp />
-    </div>
-  )
+  redirect('/sign-in')
 }
