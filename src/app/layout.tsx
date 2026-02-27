@@ -1,20 +1,17 @@
 // src/app/layout.tsx
-import type { Metadata } from "next"
-import { Toaster } from "react-hot-toast"
-import "./globals.css"
+import type { Metadata } from 'next'
+import { Toaster } from 'react-hot-toast'
+import Providers from '@/components/Providers'
+import './globals.css'
 
 export const metadata: Metadata = {
-  title: "ARC Raiders LFG - Find Your Squad",
-  description: "Looking for Group platform for ARC Raiders. Find teammates, create squads, and dominate together.",
-  keywords: ["ARC Raiders", "LFG", "Looking For Group", "Gaming", "Multiplayer"],
-  authors: [{ name: "ARC Raiders Community" }],
+  title: 'ARC Raiders LFG — Find Your Squad',
+  description: 'Looking for Group platform for ARC Raiders. Find teammates, create squads, and dominate together.',
+  keywords: ['ARC Raiders', 'LFG', 'Looking For Group', 'Gaming', 'Multiplayer'],
+  authors: [{ name: 'ARC Raiders Community' }],
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -22,8 +19,10 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
       </head>
       <body className="bg-slate-950 text-slate-100">
-        {children}
-        <Toaster position="top-right" />
+        <Providers>
+          {children}
+          <Toaster position="top-right" />
+        </Providers>
       </body>
     </html>
   )
