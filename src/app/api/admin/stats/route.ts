@@ -1,7 +1,7 @@
-// src/app/api/admin/stats/route.ts
+﻿// src/app/api/admin/stats/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Mock stats for now
     const stats = {
