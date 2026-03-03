@@ -34,7 +34,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!(session?.user as any)?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session?.user || !(session.user as any).id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await req.json()
     const { title, description, gameMode, skillLevel, playersNeeded, timezone, language, preferredMap } = body
@@ -66,6 +68,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Failed to create posting' }, { status: 500 })
   }
 }
+
 
 
 

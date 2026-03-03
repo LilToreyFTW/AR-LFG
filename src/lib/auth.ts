@@ -15,7 +15,7 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
-        session.user.id = user.id
+        (session.user as any).id = user.id
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           select: { discordId: true, embarkId: true, embarkUsername: true },

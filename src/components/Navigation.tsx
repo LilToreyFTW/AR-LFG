@@ -4,7 +4,6 @@
 import Link from 'next/link'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { Users, Swords, Heart, LogOut, LogIn } from 'lucide-react'
-import Image from 'next/image'
 
 export default function Navigation() {
   const { data: session, status } = useSession()
